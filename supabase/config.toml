@@ -1,0 +1,14 @@
+[api]
+port = 54321
+
+[db]
+port = 54322
+
+[studio]
+port = 54323
+
+[functions.ia-proxy]
+verify_jwt = false  # JWT validado manualmente dentro da função
+
+[functions.webhook-gateway]
+verify_jwt = false  # Usa token próprio (x-healtrack-token)
