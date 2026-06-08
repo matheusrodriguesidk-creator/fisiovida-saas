@@ -1172,7 +1172,7 @@ function mostrarBannerTrial(dias){
   const banner=document.createElement('div');
   banner.id='trial-banner';
   banner.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.2)';
-  banner.innerHTML=`<span>⏳ ${escH(msg)} <a href="mailto:suporte@healtrack.com.br" style="color:#fff;text-decoration:underline;margin-left:8px">Assinar agora →</a></span>
+  banner.innerHTML=`<span>⏳ ${escH(msg)} <span style="color:#fff;text-decoration:underline;margin-left:8px;cursor:pointer" onclick="nav('planos')">Ver planos →</span></span>
     <button onclick="this.parentElement.remove()" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;padding:0 4px">×</button>`;
   document.body.prepend(banner);
 }
@@ -2048,6 +2048,8 @@ function render(){
   if(app)app.dataset.booted='1';
   if(S.view==='login'){app.innerHTML=rLogin();bindLogin();return;}
   if(S.view==='cadastro'){app.innerHTML=rCadastro();bindCadastro();return;}
+  if(S.view==='planos'){app.innerHTML=rPlanos();return;}
+  if(S.view==='admin'){app.innerHTML=rAdmin();bindAdmin();return;}
   app.innerHTML=`<div class="layout">
     <div class="sb-overlay" id="sb-overlay" onclick="closeSb()"></div>
     ${rSidebar()}
@@ -2103,7 +2105,8 @@ function rSidebar(){
       </div>
       ${S.profissionais.length>0?`<button class="trocar-perfil-btn" onclick="trocarPerfil()" title="Trocar perfil">${icon('swap')}</button>`:''}
       </div>
-      ${S.assinatura?.plano==='trial'?`<div style="margin-bottom:8px;background:#fef3c7;border-radius:var(--r-sm);padding:8px 10px;font-size:11px;color:#92400e;text-align:center">⏳ Trial: ${S.assinatura.dias_restantes}d restantes</div>`:''}
+      ${S.assinatura?.plano==='trial'?`<button onclick="nav('planos')" style="width:100%;margin-bottom:8px;background:#fef3c7;border:none;border-radius:var(--r-sm);padding:8px 10px;font-size:11px;color:#92400e;text-align:center;cursor:pointer">⏳ Trial: ${S.assinatura.dias_restantes}d restantes — Ver planos</button>`:''}
+      ${isAdmin()?`<button class="nav-btn-cfg" onclick="nav('admin')" style="${S.view==='admin'?'color:var(--primary);font-weight:700':''}">⚙️ Admin</button>`:''}
       <button class="nav-btn-cfg ${cfgAtivo?'cfg-active':''}" onclick="nav('configuracoes')">${icon('gear')} Configurações</button>
       <button class="btn-sair" onclick="sair()">${icon('exit')} Sair</button>
     </div>
@@ -2145,6 +2148,123 @@ function bindLogin(){
   };
   btn?.addEventListener('click',doLogin);
   document.getElementById('lsnh')?.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+}
+
+// ── PLANOS ──
+function rPlanos(){
+  const ass=S.assinatura||{};
+  const planoAtual=ass.plano||'trial';
+  const planos=[
+    {id:'starter',nome:'Starter',preco:'R$ 97/mês',descricao:'Para profissionais autônomos',features:['Até 50 pacientes ativos','Pacotes e sessões ilimitados','Avaliação IA com 30 análises/hora','Agenda completa','PDFs profissionais','Backup LGPD'],destaque:false},
+    {id:'pro',nome:'Pro',preco:'R$ 197/mês',descricao:'Para clínicas em crescimento',features:['Até 200 pacientes ativos','Tudo do Starter','Profissionais ilimitados com PIN','Análises IA sem limite','Relatórios comparativos','Suporte prioritário'],destaque:true},
+    {id:'enterprise',nome:'Enterprise',preco:'Sob consulta',descricao:'Para redes e franquias',features:['Pacientes ilimitados','White-label / marca própria','API de integração','Multi-clínica centralizada','SLA garantido','Onboarding dedicado'],destaque:false}
+  ];
+  return`<div class="ph"><div><h1 class="ph-title">Planos Healtrack</h1><p class="ph-sub">Escolha o plano ideal para a sua clínica</p></div></div>
+  <div class="pc">
+    ${ass.plano==='trial'?`<div style="background:#fef3c7;border-radius:var(--r-sm);padding:14px 18px;margin-bottom:24px;font-size:14px;color:#92400e;display:flex;align-items:center;gap:12px"><span style="font-size:24px">⏳</span><div><strong>Você está no período de trial gratuito</strong> — ${ass.dias_restantes||0} dias restantes.</div></div>`:''}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;margin-bottom:32px">
+      ${planos.map(p=>`
+        <div style="background:var(--surface);border-radius:var(--r-lg);padding:28px 24px;border:${p.destaque?'2px solid var(--primary)':'1.5px solid var(--border)'};position:relative${p.destaque?';box-shadow:var(--shadow-lg)':''}">
+          ${p.destaque?'<div style="position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--grad-btn);color:#fff;font-size:11px;font-weight:700;padding:4px 14px;border-radius:20px;white-space:nowrap">⭐ MAIS POPULAR</div>':''}
+          ${planoAtual===p.id?'<div style="position:absolute;top:12px;right:12px;background:#d1fae5;color:#065f46;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px">ATUAL</div>':''}
+          <div style="font-size:20px;font-weight:700;color:var(--primary-dk);margin-bottom:4px">${p.nome}</div>
+          <div style="font-size:13px;color:var(--txt3);margin-bottom:16px">${p.descricao}</div>
+          <div style="font-size:28px;font-weight:800;color:var(--primary);margin-bottom:20px">${p.preco}</div>
+          <ul style="list-style:none;padding:0;margin:0 0 24px;display:flex;flex-direction:column;gap:8px">
+            ${p.features.map(f=>`<li style="font-size:13px;color:var(--txt2);display:flex;align-items:flex-start;gap:8px"><span style="color:#22c55e;font-size:15px;flex-shrink:0">✓</span>${escH(f)}</li>`).join('')}
+          </ul>
+          ${planoAtual===p.id
+            ?'<div class="btn btn-g" style="width:100%;text-align:center;cursor:default">✓ Plano atual</div>'
+            :p.id==='enterprise'
+              ?'<a href="mailto:vendas@healtrack.com.br?subject=Interesse+Enterprise" class="btn btn-p" style="width:100%;text-align:center;text-decoration:none;display:block">Falar com vendas</a>'
+              :`<a href="mailto:vendas@healtrack.com.br?subject=Assinar+${p.nome}" class="btn btn-p" style="width:100%;text-align:center;text-decoration:none;display:block">Assinar ${p.nome}</a>`
+          }
+        </div>`).join('')}
+    </div>
+    <div style="background:var(--surface);border-radius:var(--r-lg);padding:24px;border:1.5px solid var(--border)">
+      <div style="font-size:14px;font-weight:600;color:var(--primary-dk);margin-bottom:12px">💬 Dúvidas frequentes</div>
+      <div style="display:grid;gap:12px;font-size:13px;color:var(--txt2)">
+        <div><strong style="color:var(--txt1)">Posso mudar de plano depois?</strong><br>Sim, o upgrade é imediato. O downgrade ocorre no próximo ciclo.</div>
+        <div><strong style="color:var(--txt1)">Os dados migram se eu assinar?</strong><br>Sim. Tudo que você cadastrou no trial é preservado ao assinar.</div>
+        <div><strong style="color:var(--txt1)">Como funciona o pagamento?</strong><br>Pix recorrente, boleto ou cartão de crédito. Sem fidelidade — cancele quando quiser.</div>
+        <div><strong style="color:var(--txt1)">Meus dados de pacientes ficam seguros?</strong><br>Dados isolados por clínica, criptografados em repouso, com backups diários. Conformidade LGPD.</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── ADMIN PANEL ──
+const ADMIN_EMAILS=['matheusrodriguesidk@gmail.com'];
+function isAdmin(){return S.user&&ADMIN_EMAILS.includes(S.user.email);}
+
+async function loadAdminData(){
+  if(!isAdmin())return null;
+  try{
+    const{data:assinaturas}=await sb.from('assinaturas').select('user_id,plano,status,trial_fim,valido_ate,max_pacientes,ia_habilitada,created_at').order('created_at',{ascending:false}).limit(200);
+    const{data:uso}=await sb.from('ia_usage').select('user_id,plano,tokens_input,tokens_output,created_at').order('created_at',{ascending:false}).limit(500);
+    return{assinaturas:assinaturas||[],uso:uso||[]};
+  }catch(e){console.error('Admin:',e);return{assinaturas:[],uso:[]};}
+}
+
+function rAdmin(){
+  if(!isAdmin())return`<div style="padding:40px;text-align:center"><div style="font-size:48px;margin-bottom:16px">🚫</div><h2>Acesso restrito</h2><button class="btn btn-g" onclick="nav('dashboard')">← Voltar</button></div>`;
+  return`<div class="ph"><div><h1 class="ph-title">⚙️ Painel Admin</h1><p class="ph-sub">Gestão de assinantes Healtrack</p></div><div style="display:flex;gap:10px"><button class="btn btn-s btn-sm" onclick="bindAdmin()">↻ Atualizar</button><button class="btn btn-g btn-sm" onclick="nav('dashboard')">← Voltar</button></div></div>
+  <div class="pc" id="admin-content"><div style="text-align:center;padding:40px;color:var(--txt3)">Carregando dados…</div></div>`;
+}
+
+async function bindAdmin(){
+  if(!isAdmin())return;
+  const el=document.getElementById('admin-content');
+  if(!el)return;
+  el.innerHTML='<div style="text-align:center;padding:40px;color:var(--txt3)">Carregando…</div>';
+  const data=await loadAdminData();
+  if(!data){el.innerHTML='<div style="padding:20px;color:#dc2626">Erro</div>';return;}
+  const{assinaturas,uso}=data;
+  const agora=new Date();
+  const kpis=[
+    {l:'Total',v:assinaturas.length,c:'var(--primary)'},
+    {l:'Ativos',v:assinaturas.filter(a=>a.status==='ativo').length,c:'#22c55e'},
+    {l:'Trials',v:assinaturas.filter(a=>a.plano==='trial'&&a.status==='ativo').length,c:'#f59e0b'},
+    {l:'Pagantes',v:assinaturas.filter(a=>a.plano!=='trial'&&a.status==='ativo').length,c:'#3b82f6'},
+    {l:'Inadim.',v:assinaturas.filter(a=>a.status==='inadimplente').length,c:'#ef4444'},
+    {l:'Tokens 24h',v:uso.filter(u=>u.created_at>new Date(agora-86400000).toISOString()).reduce((s,u)=>s+(u.tokens_input||0)+(u.tokens_output||0),0).toLocaleString('pt-BR'),c:'#8b5cf6'},
+  ];
+  const expirando=assinaturas.filter(a=>{if(a.plano!=='trial'||a.status!=='ativo')return false;const d=(new Date(a.trial_fim)-agora)/86400000;return d>=0&&d<=3;});
+  const corSt={ativo:'#22c55e',inadimplente:'#ef4444',cancelado:'#94a3b8',suspenso:'#f59e0b'};
+  el.innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:24px">
+      ${kpis.map(k=>`<div style="background:var(--surface);border-radius:var(--r-sm);padding:16px;border:1.5px solid var(--border);text-align:center"><div style="font-size:22px;font-weight:800;color:${k.c}">${k.v}</div><div style="font-size:11px;color:var(--txt3);margin-top:4px">${k.l}</div></div>`).join('')}
+    </div>
+    ${expirando.length?`<div style="background:#fef3c7;border-radius:var(--r-sm);padding:14px;margin-bottom:20px"><strong style="color:#92400e">⏳ ${expirando.length} trial(s) expirando em 3 dias</strong>${expirando.map(a=>`<div style="font-size:11px;color:#78350f;margin-top:4px">${a.user_id.slice(0,16)}… — ${new Date(a.trial_fim).toLocaleDateString('pt-BR')}</div>`).join('')}</div>`:''}
+    <div style="background:var(--surface);border-radius:var(--r-lg);border:1.5px solid var(--border);overflow:hidden;margin-bottom:20px">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:600;font-size:13px">📋 Assinantes (${assinaturas.length})</div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:var(--bg)">${['user_id','plano','status','validade','pac.max','IA','criado'].map(h=>`<th style="padding:7px 10px;text-align:left;font-weight:600;color:var(--txt3);white-space:nowrap">${h}</th>`).join('')}</tr></thead>
+        <tbody>${assinaturas.map((a,i)=>`<tr style="border-top:1px solid var(--border);${i%2?'':'background:var(--bg)'}">
+          <td style="padding:7px 10px;font-family:monospace;font-size:10px" title="${a.user_id}">${a.user_id.slice(0,14)}…</td>
+          <td style="padding:7px 10px"><span style="background:var(--primary-lt);color:var(--primary-dk);padding:1px 7px;border-radius:20px;font-size:10px;font-weight:600;text-transform:uppercase">${a.plano}</span></td>
+          <td style="padding:7px 10px;color:${corSt[a.status]||'var(--txt2)'};font-weight:600">${a.status}</td>
+          <td style="padding:7px 10px;white-space:nowrap">${a.plano==='trial'?(a.trial_fim?new Date(a.trial_fim).toLocaleDateString('pt-BR'):'—'):(a.valido_ate?new Date(a.valido_ate).toLocaleDateString('pt-BR'):'∞')}</td>
+          <td style="padding:7px 10px">${a.max_pacientes}</td>
+          <td style="padding:7px 10px">${a.ia_habilitada?'✅':'❌'}</td>
+          <td style="padding:7px 10px;white-space:nowrap">${new Date(a.created_at).toLocaleDateString('pt-BR')}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>
+    <div style="background:var(--surface);border-radius:var(--r-lg);border:1.5px solid var(--border);overflow:hidden">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:600;font-size:13px">🤖 Uso de IA — últimas ${Math.min(uso.length,50)} chamadas</div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:var(--bg)">${['user_id','plano','tok.in','tok.out','total','quando'].map(h=>`<th style="padding:7px 10px;text-align:left;font-weight:600;color:var(--txt3)">${h}</th>`).join('')}</tr></thead>
+        <tbody>${uso.slice(0,50).map((u,i)=>`<tr style="border-top:1px solid var(--border);${i%2?'':'background:var(--bg)'}">
+          <td style="padding:7px 10px;font-family:monospace;font-size:10px">${u.user_id.slice(0,14)}…</td>
+          <td style="padding:7px 10px">${u.plano||'—'}</td>
+          <td style="padding:7px 10px">${u.tokens_input||0}</td>
+          <td style="padding:7px 10px">${u.tokens_output||0}</td>
+          <td style="padding:7px 10px;font-weight:600">${(u.tokens_input||0)+(u.tokens_output||0)}</td>
+          <td style="padding:7px 10px;white-space:nowrap">${new Date(u.created_at).toLocaleString('pt-BR')}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>`;
 }
 
 // ── CADASTRO / SIGNUP ──
@@ -2900,8 +3020,16 @@ function rCfg(){
       <div class="fg"><label class="fl">Endereço</label><input class="fi" id="ce" value="${c.endereco||''}"></div>
     </div>
     <div class="cfg-sec">
-      <div class="cfg-sec-t">🔑 Integração IA</div>
-      <div class="fg"><label class="fl">Chave API Anthropic</label><input class="fi" type="password" id="capi" placeholder="sk-ant-…" value="${c.claude_api_key||''}"><div class="cfg-hint">Necessária para avaliação de cicatrização com IA nas sessões</div></div>
+      <div class="cfg-sec-t">🤖 Inteligência Artificial</div>
+      <div style="background:var(--primary-lt);border-radius:var(--r-sm);padding:14px 16px;font-size:13px;color:var(--primary-dk)">
+        <div style="font-weight:600;margin-bottom:6px">✅ IA gerenciada pelo Healtrack</div>
+        <div style="color:var(--txt2);line-height:1.6">A análise de cicatrização por IA está incluída no seu plano — sem necessidade de configurar chaves de API. Seus dados clínicos são processados com segurança e nunca são usados para treinar modelos.</div>
+        ${S.assinatura?`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--primary-lt)">
+          <span style="font-size:12px;font-weight:600;color:var(--primary-dk)">Plano atual: </span>
+          <span style="font-size:12px;color:var(--txt2);text-transform:capitalize">${S.assinatura.plano}</span>
+          ${S.assinatura.plano==='trial'?`<span style="font-size:11px;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:20px;margin-left:8px">⏳ ${S.assinatura.dias_restantes} dias restantes</span>`:''}
+        </div>`:''}
+      </div>
     </div>
     <div class="cfg-sec">
       <div class="cfg-sec-t">✦ Prompt de Avaliação IA</div>
@@ -3464,7 +3592,7 @@ function bindCfgEvts(){
     reader.readAsDataURL(file);
   });
   document.getElementById('bscfg')?.addEventListener('click',async()=>{
-    const dados={...S.config,nome_profissional:document.getElementById('cn').value.trim(),crefito:document.getElementById('cc').value.trim(),clinica:document.getElementById('ccl').value.trim(),telefone:document.getElementById('ct').value.trim(),endereco:document.getElementById('ce').value.trim(),claude_api_key:document.getElementById('capi').value.trim(),prompt_avaliacao:document.getElementById('cprompt').value.trim(),pdf_cor:document.getElementById('cpdfcor').value,pdf_clinica:document.getElementById('cpdfclinica').value.trim(),pdf_rodape:document.getElementById('cpdfrodape').value.trim(),
+    const dados={...S.config,nome_profissional:document.getElementById('cn').value.trim(),crefito:document.getElementById('cc').value.trim(),clinica:document.getElementById('ccl').value.trim(),telefone:document.getElementById('ct').value.trim(),endereco:document.getElementById('ce').value.trim(),prompt_avaliacao:document.getElementById('cprompt').value.trim(),pdf_cor:document.getElementById('cpdfcor').value,pdf_clinica:document.getElementById('cpdfclinica').value.trim(),pdf_rodape:document.getElementById('cpdfrodape').value.trim(),
       pdf_opts:{
         pagina:document.getElementById('cpdf-pagina')?.value||'A4',
         margem_h:parseInt(document.getElementById('cpdf-mh')?.value)||40,
