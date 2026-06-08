@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Healtrack — Sistema de gestão clínica para fisioterapia pós-operatória. Controle pacientes, sessões, pacotes e evolução com IA.">
   <title>Healtrack</title>
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#3a4163">
@@ -58,6 +59,8 @@
       --sh-md:0 6px 24px rgba(58,65,99,.14);
       --sh-lg:0 12px 48px rgba(58,65,99,.18);
       --sw:264px;
+  --shadow-lg:0 16px 64px rgba(58,65,99,.22),0 4px 16px rgba(0,0,0,.08);
+  --txt1:#1A1D2E;
     }
     html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--txt);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;}
     #app{height:100%;display:flex;flex-direction:column;}
@@ -297,7 +300,30 @@
 
         /* ── HAMBURGER & MOBILE ── */
     .hamburger{display:none;flex-direction:column;gap:5px;cursor:pointer;padding:8px;background:none;border:none;flex-shrink:0;}
-    .hamburger span{display:block;width:22px;height:2.5px;background:#fff;border-radius:2px;transition:background-color .2s,border-color .2s,box-shadow .2s,transform .2s,color .2s;}
+
+    /* ── BOTTOM NAV MOBILE ── */
+    .mob-bottom-nav{
+      display:none;position:fixed;bottom:0;left:0;right:0;z-index:200;
+      background:#fff;border-top:1px solid var(--border);
+      padding:6px 0 max(6px,env(safe-area-inset-bottom));
+      box-shadow:0 -2px 12px rgba(0,0,0,.06);
+    }
+    .mob-bottom-nav .nav-items{
+      display:flex;justify-content:space-around;align-items:stretch;max-width:480px;margin:0 auto;
+    }
+    .mob-nav-btn{
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:3px;padding:4px 8px;background:transparent;border:none;cursor:pointer;
+      flex:1;min-width:0;color:var(--txt3);transition:color .15s;
+    }
+    .mob-nav-btn.active{color:var(--primary);}
+    .mob-nav-btn svg{width:22px;height:22px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+    .mob-nav-btn span{font-size:10px;font-weight:600;white-space:nowrap;}
+    .mob-nav-badge{
+      position:absolute;top:2px;right:calc(50% - 18px);
+      background:#ef4444;color:#fff;font-size:9px;font-weight:700;
+      min-width:14px;height:14px;border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 3px;
+    }    .hamburger span{display:block;width:22px;height:2.5px;background:#fff;border-radius:2px;transition:background-color .2s,border-color .2s,box-shadow .2s,transform .2s,color .2s;}
     .mob-header{display:none;align-items:center;justify-content:space-between;padding:0 8px 0 4px;height:52px;background:linear-gradient(90deg,#2a3057,#3a4163);position:sticky;top:0;z-index:100;flex-shrink:0;}
     .mob-header-logo{font-family:'DM Serif Display',serif;font-size:17px;color:#fff;display:flex;align-items:center;gap:8px;}
     .mob-header-logo img{width:26px;height:26px;object-fit:contain;}
@@ -342,6 +368,8 @@
       .kpi-grid{grid-template-columns:repeat(2,1fr)!important;gap:10px;margin-bottom:18px;}
       .dash-grid{grid-template-columns:1fr!important;gap:14px;}
       .kpi-grid .card{padding:12px;}
+      .pc{padding-bottom:80px;}
+      .mob-bottom-nav{display:flex;}
     }
 
     /* ── AGENDA SEMANAL ── */
@@ -1120,6 +1148,10 @@ function restoreSessaoForm(){
   }catch{}
 }
 
+// ── ADMIN — definido antes do boot() para evitar uso antes de declaração ──
+const ADMIN_EMAILS=['matheusrodriguesidk@gmail.com'];
+function isAdmin(){return !!(S.user&&ADMIN_EMAILS.includes(S.user.email));}
+
 // ══════════════════════════════════════════════════════════
 // HEALTRACK — ASSINATURA / TRIAL
 // ══════════════════════════════════════════════════════════
@@ -1241,12 +1273,20 @@ async function login(email,pw){
   const{data,error}=await sb.auth.signInWithPassword({email,password:pw});
   if(error)throw error;
   S.user=data.user;
-  S.profAtual=null; try{sessionStorage.removeItem('profAtual');}catch(e){} // novo login sempre pede perfil
+  S.profAtual=null; try{sessionStorage.removeItem('profAtual');}catch(e){}
+  // Verificar assinatura ANTES de carregar dados
+  const assStatus=await verificarAssinatura();
+  S.assinatura=assStatus;
+  if(assStatus.bloqueado){navBloqueado(assStatus);return;}
   await Promise.all([loadCfg(),loadPacs(),loadAgenda(),loadProfissionais()]);
-  if(S.profissionais.length>0){ mostrarSeletorPerfil(); }       // tem equipe: escolher quem está atendendo
-  else { S.profAtual=ownerProf(); nav('dashboard'); }            // conta individual: entra direto
+  // Banner trial se expira em breve
+  if(assStatus.plano==='trial'&&assStatus.dias_restantes<=5){
+    setTimeout(()=>mostrarBannerTrial(assStatus.dias_restantes),1200);
+  }
+  if(S.profissionais.length>0){mostrarSeletorPerfil();}
+  else{S.profAtual=ownerProf();nav('dashboard');}
 }
-async function sair(){await sb.auth.signOut();S.user=null;nav('login');}
+async function sair(){await sb.auth.signOut();S.user=null;S.assinatura=null;S.profAtual=null;try{sessionStorage.removeItem('profAtual');}catch(e){}nav('login');}
 
 // ── CONFIG ──
 async function loadCfg(){
@@ -2059,6 +2099,7 @@ function render(){
         <div class="mob-header-logo">${DEFAULT_LOGO?`<img src="${DEFAULT_LOGO}">`:''}Healtrack</div>
         <div style="width:38px"></div>
       </div>
+      ${rMobBottomNav()}
       <main class="main" id="mc">${rView()}</main>
     </div>
   </div>`;
@@ -2075,6 +2116,22 @@ function icon(nome){
     swap:'<path d="M7 4 3 8l4 4"/><path d="M3 8h13a4 4 0 0 1 4 4"/><path d="M17 20l4-4-4-4"/><path d="M21 16H8a4 4 0 0 1-4-4"/>'
   };
   return '<svg class="nav-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+(p[nome]||'')+'</svg>';
+}
+
+function rMobBottomNav(){
+  const v=S.view;
+  const agHoje=agendaHoje().length;
+  const isPac=['pacientes','paciente','sessao'].includes(v);
+  const ic=(d)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  const btn=(vid,svg,lbl,active,badge)=>`<button class="mob-nav-btn${active?' active':''}" onclick="nav('${vid}')">
+    <div style="position:relative">${ic(svg)}${badge?`<span class="mob-nav-badge">${badge}</span>`:''}</div>
+    <span>${lbl}</span></button>`;
+  return`<nav class="mob-bottom-nav" id="mob-bnav"><div class="nav-items">
+    ${btn('dashboard','<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/>','Início',v==='dashboard')}
+    ${btn('pacientes','<circle cx="9" cy="8" r="3.2"/><path d="M3 19c0-3 2.7-5 6-5s6 2 6 5"/><path d="M16 6.2A3 3 0 0 1 16 12"/><path d="M18 14c2 .6 3.5 2.2 3.5 4.5"/>','Pacientes',isPac)}
+    ${btn('agenda','<rect x="3.5" y="4.5" width="17" height="16" rx="2"/><path d="M3.5 9h17"/><path d="M8 2.5v4M16 2.5v4"/>','Agenda',v==='agenda',agHoje||'')}
+    ${btn('configuracoes','<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5 5l2.1 2.1M16.9 16.9 19 19M19 5l-2.1 2.1M7.1 16.9 5 19"/>','Config',v==='configuracoes')}
+  </div></nav>`;
 }
 
 function rSidebar(){
@@ -2121,7 +2178,7 @@ function rView(){
     case 'sessao':return rSessForm();
     case 'agenda':return rAgenda();
     case 'configuracoes':return rCfg();
-    default:return'<div style="padding:40px">Carregando…</div>';
+    default:nav('dashboard');return'';
   }
 }
 
@@ -2194,8 +2251,7 @@ function rPlanos(){
 }
 
 // ── ADMIN PANEL ──
-const ADMIN_EMAILS=['matheusrodriguesidk@gmail.com'];
-function isAdmin(){return S.user&&ADMIN_EMAILS.includes(S.user.email);}
+// isAdmin() — movida para antes do boot()
 
 async function loadAdminData(){
   if(!isAdmin())return null;
@@ -2377,6 +2433,7 @@ function rDash(){
     <button class="btn btn-p" id="bnp">+ Novo Paciente</button>
   </div>
   <div class="pc">
+    ${S.assinatura?.plano==='trial'&&(S.assinatura?.dias_restantes||0)<=7?`<div onclick="nav('planos')" style="background:linear-gradient(135deg,#fef3c7,#fde68a);border-radius:var(--r-sm);padding:12px 16px;margin-bottom:16px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border:1.5px solid #f59e0b"><strong style="color:#92400e">⏳ Trial: ${S.assinatura.dias_restantes} dia(s) restantes</strong><span style="color:#78350f;font-size:13px;margin-left:10px">Ver planos →</span></div>`:''}
 
     <!-- KPIs -->
     <div class="kpi-grid">
@@ -2508,7 +2565,7 @@ function rPacCard(p){
   const total=pk?.total_sessoes||0,pct=total>0?Math.round((feitas/total)*100):0,fase=calcFase(a?.data_cirurgia);
   return`<div class="pac-card" onclick="openPac('${p.id}')">
     <div class="pac-card-hd"><div class="pac-av">${p.foto_url?`<img src="${p.foto_url}">`:`${ini(p.nome)}`}</div>
-    <div><div class="pac-nm">${p.nome}</div><div class="pac-info">${a?.tipo_cirurgia||'Sem cirurgia registrada'}</div></div></div>
+    <div><div class="pac-nm">${escH(p.nome)}</div><div class="pac-info">${a?.tipo_cirurgia||'Sem cirurgia registrada'}</div></div></div>
     ${fase?`<span class="badge b-${fase.cls}">${fase.nome} · D${fase.dias}</span>`:''}
     ${pk?`<div class="pac-ft"><div><div class="prog-lbl">Sessões ${feitas}/${total}</div><div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div></div><span class="badge b-acc">${pct}%</span></div>`:`<div class="pac-ft"><span class="badge b-n">Sem pacote ativo</span></div>`}
   </div>`;
@@ -2682,7 +2739,7 @@ function rMes(){
           ${S.agenda.filter(e=>e.data>=hojeStr&&e.status==='agendado').slice(0,5).map(e=>`
             <div class="agenda-item" onclick="verEvento('${e.id}')">
               <div class="agenda-hora">${fmtH(e.hora_inicio)}<span>${fmtD(e.data)}</span></div>
-              <div class="agenda-info"><div class="agenda-titulo">${e.titulo}</div>${e.pacientes?.nome?`<div class="agenda-pac">${e.pacientes.nome}</div>`:''}</div>
+              <div class="agenda-info"><div class="agenda-titulo">${e.titulo}</div>${e.pacientes?.nome?`<div class="agenda-pac">${escH(e.pacientes.nome)}</div>`:''}</div>
             </div>`).join('')||`<div style="text-align:center;padding:16px;color:var(--txt3);font-size:13px">Nenhum evento futuro</div>`}
         </div>
       </div>
@@ -2706,7 +2763,7 @@ function rPac(){
     <div class="p-hero">
       <div class="p-hero-av">${p.foto_url?`<img src="${p.foto_url}">`:`${ini(p.nome)}`}</div>
       <div style="flex:1">
-        <div class="p-hero-nm">${p.nome}</div>
+        <div class="p-hero-nm">${escH(p.nome)}</div>
         <div class="p-hero-meta">
           ${a.tipo_cirurgia?`<span class="meta-it">✂ ${a.tipo_cirurgia}</span>`:''}
           ${a.data_cirurgia?`<span class="meta-it">📅 Cirurgia: ${fmtD(a.data_cirurgia)}</span>`:''}
