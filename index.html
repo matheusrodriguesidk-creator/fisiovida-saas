@@ -496,6 +496,31 @@
     @keyframes sir{from{transform:translateX(20px);opacity:0;}to{transform:translateX(0);opacity:1;}}
     @keyframes fo{to{opacity:0;transform:translateX(20px);}}
   </style>
+  <!-- ── Sentry Error Monitoring ────────────────────────────── -->
+  <!-- Após criar conta em sentry.io, substitua __HEALTRACK_SENTRY_DSN__ pela DSN do projeto -->
+  <script>
+    window.__SENTRY_DSN__ = '__HEALTRACK_SENTRY_DSN__';
+    if(window.__SENTRY_DSN__ && window.__SENTRY_DSN__.indexOf('__') === -1) {
+      var s = document.createElement('script');
+      s.src = 'https://browser.sentry-cdn.com/7.99.0/bundle.min.js';
+      s.crossOrigin = 'anonymous';
+      s.onload = function() {
+        Sentry.init({
+          dsn: window.__SENTRY_DSN__,
+          release: document.querySelector('meta[name="app-version"]')?.content || '1.0.0-saas',
+          environment: location.hostname === 'localhost' ? 'dev' : 'production',
+          tracesSampleRate: 0.05,
+          ignoreErrors: ['ResizeObserver loop', 'Non-Error promise rejection'],
+          beforeSend: function(e) {
+            // LGPD: nunca enviar dados de pacientes
+            if(e.extra) { delete e.extra.pac; delete e.extra.pacientes; delete e.extra.config; }
+            return e;
+          }
+        });
+      };
+      document.head.appendChild(s);
+    }
+  </script>
 </head>
 <body>
 <div id="app"></div>
@@ -546,6 +571,54 @@
 window.addEventListener('unhandledrejection',e=>console.error('[Healtrack-SaaS]',e.reason));
 window.onerror=(m,s,l)=>{console.error('[Healtrack-SaaS]',m,s+':'+l);return false;};
 
+// ══ MÓDULO DE SUPORTE ════════════════════════════════════
+(function(){
+  var PRODUCT='healtrack', VERSION=document.querySelector('meta[name="app-version"]')?.content||'1.0.0-saas';
+  // Identifica usuário no Sentry — chame após login
+  window._sentryIdentify=function(email,uid){
+    if(!window.Sentry)return;
+    Sentry.setUser({id:uid,email_domain:email?.split('@')[1]||'?'});
+    Sentry.setTag('product',PRODUCT); Sentry.setTag('version',VERSION);
+  };
+  // suporte() no console — cliente copia e manda pro suporte
+  window.suporte=function(){
+    var i={produto:PRODUCT,versao:VERSION,url:location.href,online:navigator.onLine,
+      plano:window.S?.assinatura?.plano||'N/A',
+      user_id:window.S?.user?.id?.slice(0,8)||'N/A',
+      ts:new Date().toISOString()};
+    console.group('%c🔧 Healtrack Suporte','color:#4fa0d4;font-size:14px;font-weight:bold');
+    Object.entries(i).forEach(([k,v])=>console.log('%c'+k+': %c'+v,'color:#9AA5B4;font-weight:bold','color:#1A1D2E'));
+    console.log('%c→ Copie e envie para suporte@healtrack.com.br','color:#f59e0b;font-weight:bold');
+    console.groupEnd(); return i;
+  };
+  // Banner offline
+  var _offlineId='ht-offline';
+  window.addEventListener('offline',function(){
+    if(document.getElementById(_offlineId))return;
+    var b=document.createElement('div'); b.id=_offlineId;
+    b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#ef4444;color:#fff;padding:9px 16px;text-align:center;font-size:13px;font-weight:600;font-family:inherit;box-shadow:0 2px 8px rgba(0,0,0,.2)';
+    b.textContent='⚠️ Sem conexão com a internet — as alterações não serão salvas';
+    document.body.prepend(b);
+  });
+  window.addEventListener('online',function(){document.getElementById(_offlineId)?.remove();});
+  if(!navigator.onLine)window.dispatchEvent(new Event('offline'));
+  // Fetch com retry 1x em falha de rede
+  var _ofetch=window.fetch;
+  window.fetch=async function(){
+    try{return await _ofetch.apply(this,arguments);}
+    catch(e){
+      if(e.name==='TypeError'&&navigator.onLine){await new Promise(r=>setTimeout(r,1500));return await _ofetch.apply(this,arguments);}
+      throw e;
+    }
+  };
+  // Versão no rodapé
+  window.addEventListener('DOMContentLoaded',function(){
+    var v=document.createElement('div');
+    v.style.cssText='position:fixed;bottom:3px;right:6px;font-size:9px;color:rgba(154,165,180,.45);pointer-events:none;z-index:1;font-family:monospace;user-select:none';
+    v.textContent=PRODUCT+' v'+VERSION; document.body.appendChild(v);
+  });
+  console.log('%c'+PRODUCT+' v'+VERSION+' carregado — suporte() para diagnóstico','color:#4fa0d4');
+})();
 if(typeof window.supabase==='undefined'||!window.supabase||!window.supabase.createClient){
   window.__healtrackerro('Não foi possível carregar as bibliotecas do sistema. Verifique sua conexão e recarregue.','biblioteca Supabase não disponível');
   throw new Error('Supabase library not loaded');
@@ -1240,6 +1313,8 @@ async function boot(){
     const{data:{session}}=await sb.auth.getSession();
     if(session){
       S.user=session.user;
+      // Identificar no Sentry para rastreamento de erros
+      if(typeof _sentryIdentify==='function') _sentryIdentify(session.user.email, session.user.id);
       await Promise.all([loadCfg(),loadPacs(),loadAgenda(),loadProfissionais()]);
       // ── Verificar assinatura ──
       const assStatus = await verificarAssinatura();
