@@ -48,7 +48,7 @@ Deno.serve(async (req: Request) => {
     return new Response('Bad Request', { status: 400 })
   }
 
-  console.log('webhook-gateway recebido:', JSON.stringify(body).slice(0, 300))
+  console.log(JSON.stringify({service:"webhook-gateway",event:eventName,ts:new Date().toISOString(),payload_size:JSON.stringify(body).length}))
 
   // ── 2. Extrair dados do evento ─────────────────────────
   // Asaas: { event: 'PAYMENT_CONFIRMED', payment: { subscription: 'sub_xxx', customer: 'cus_xxx', dueDate: '...' } }
