@@ -109,8 +109,14 @@ Deno.serve(async (req: Request) => {
     return json(iaData, 200)
 
   } catch (err) {
-    console.error('ia-proxy error:', err)
-    return json({ error: 'Erro interno do servidor' }, 500)
+    // Log estruturado para facilitar suporte
+    console.error(JSON.stringify({
+      service: 'ia-proxy',
+      event: 'unhandled_error',
+      error: err instanceof Error ? err.message : String(err),
+      ts: new Date().toISOString()
+    }))
+    return json({ error: 'Erro interno do servidor. Tente novamente em instantes.' }, 500)
   }
 })
 
