@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Healtrack — Sistema de gestão clínica para fisioterapia pós-operatória. Controle pacientes, sessões, pacotes e evolução com IA.">
   <title>Healtrack</title>
+  <meta name="app-version" content="1.0.0-saas">
+  <meta name="app-product" content="healtrack">
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#3a4163">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -540,6 +542,10 @@
 })();
 
 // Verificar se a biblioteca Supabase carregou (CDN externo pode falhar no mobile)
+// ══ ERROR HANDLER ════════════════════════════════════════════
+window.addEventListener('unhandledrejection',e=>console.error('[Healtrack-SaaS]',e.reason));
+window.onerror=(m,s,l)=>{console.error('[Healtrack-SaaS]',m,s+':'+l);return false;};
+
 if(typeof window.supabase==='undefined'||!window.supabase||!window.supabase.createClient){
   window.__healtrackerro('Não foi possível carregar as bibliotecas do sistema. Verifique sua conexão e recarregue.','biblioteca Supabase não disponível');
   throw new Error('Supabase library not loaded');
@@ -1157,13 +1163,21 @@ function isAdmin(){return !!(S.user&&ADMIN_EMAILS.includes(S.user.email));}
 // ══════════════════════════════════════════════════════════
 
 async function verificarAssinatura(){
+  // Timeout de 8s + cache local de 5min
   try{
-    const{data,error}=await sb.rpc('verificar_assinatura');
-    if(error)throw error;
+    const cached = (() => { try { const c=JSON.parse(sessionStorage.getItem('ht_ass_cache')||'null'); return c&&(Date.now()-c.ts)<300000?c.data:null; } catch(e){return null;} })();
+    if(cached) return cached;
+    const {data,error} = await Promise.race([
+      sb.rpc('verificar_assinatura'),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),8000))
+    ]);
+    if(error) throw error;
+    try{ sessionStorage.setItem('ht_ass_cache', JSON.stringify({data,ts:Date.now()})); }catch(e){}
     return data;
   }catch(e){
-    // Se falhar, permitir acesso (fail-open) mas logar
-    console.warn('Healtrack Error: verificar_assinatura falhou',e);
+    console.warn('Healtrack: verificar_assinatura falhou — fail-open',e.message);
+    // Tentar cache mesmo expirado antes de fail-open
+    try{ const c=JSON.parse(sessionStorage.getItem('ht_ass_cache')||'null'); if(c) return c.data; }catch(e2){}
     return{bloqueado:false,plano:'desconhecido',dias_restantes:999,ia_habilitada:true,max_pacientes:9999};
   }
 }
